@@ -1,69 +1,139 @@
-# Claude Code Template
+# Ferret
 
-![Spellbook](spellbook.png)
+A small but eager chatbot with web search capabilities, powered by Ollama and Brave Search.
 
-A GitHub template repository containing reusable Claude Code skills and commands.
+## Features
 
-## Usage
+- **Conversational AI**: Uses local Ollama models for natural language understanding
+- **Web Search**: Integrates Brave Search API for real-time web queries
+- **Page Fetching**: Can retrieve and summarize content from web pages
+- **Session Management**: Maintains conversation context with automatic cleanup
+- **Streaming Responses**: Server-sent events for real-time chat responses
+- **Web Interface**: Clean, simple chat UI
 
-### Creating a New Project
+## Prerequisites
 
-1. Click **"Use this template"** on GitHub
-2. Create your new repository
-3. Your project automatically includes:
-   - Skills in `.claude/skills/`
-   - Commands in `.claude/commands/`
+- **Rust** 1.70 or later
+- **Ollama** installed and running locally ([download here](https://ollama.ai))
+- **Brave Search API Key** ([get one here](https://brave.com/search/api/))
 
-### Available Commands
+## Quick Start
 
-| Command | Description |
-|---------|-------------|
-| `/commit` | Create a well-crafted git commit with conventional format |
-| `/publish` | Run `dotnet publish -c release` |
-| `/push` | Commit pending changes and push to remote |
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/lawless-m/Ferret.git
+   cd Ferret
+   ```
 
-### Available Skills
+2. **Set up Ollama**:
+   ```bash
+   # Pull a model (e.g., qwen2.5:7b)
+   ollama pull qwen2.5:7b
 
-| Skill | Description |
-|-------|-------------|
-| **BrowserBridge** | Real-time browser debugging via WebSocket bridge |
-| **Creating Skills** | Guide for creating new skill documents |
-| **CSharpener** | C# static analysis for call graphs and unused code |
-| **Databases** | RDBMS patterns for DuckDB, MySQL, PostgreSQL, SQL Server |
-| **Dotnet 8 to 9** | .NET migration guide |
-| **Elasticsearch** | ES 5.2 operations - search, bulk, scroll, aliases |
-| **Email** | Email handling patterns |
-| **Image Files** | ImageMagick command-line operations |
-| **JSharpener** | JavaScript/TypeScript static analysis |
-| **Logging** | UTF-8 file logging with date-based filenames |
-| **Parquet Files** | Creating Parquet files in C# |
-| **PythonJson** | Python JSON I/O patterns |
-| **Rust** | Rust development patterns and project setup |
-| **SharePoint** | SharePoint integration |
-| **Web Frontend** | React + Tailwind + shadcn/ui artifacts |
+   # Ensure Ollama is running
+   ollama serve
+   ```
 
-## Structure
+3. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set your BRAVE_API_KEY
+   ```
+
+4. **Build and run**:
+   ```bash
+   cargo build --release
+   cargo run --release
+   ```
+
+5. **Open your browser**:
+   Navigate to `http://localhost:3000`
+
+## Configuration
+
+Configure Ferret via environment variables or `.env` file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Model to use for chat |
+| `BRAVE_API_KEY` | *(required)* | Your Brave Search API key |
+| `BIND_ADDRESS` | `0.0.0.0:3000` | Server bind address |
+| `SESSION_TIMEOUT_MINS` | `60` | Session expiry time |
+| `RUST_LOG` | `info,ferret=debug` | Logging level |
+
+## API Endpoints
+
+- `GET /` - Web chat interface
+- `POST /chat` - Send a chat message (returns SSE stream)
+- `POST /clear` - Clear conversation history
+- `GET /health` - Health check endpoint
+
+### Chat Request Format
+
+```json
+{
+  "message": "Search for recent news about Rust"
+}
+```
+
+The chatbot automatically uses tools when needed:
+- `brave_search` - Search the web with Brave Search API
+- `fetch_page` - Retrieve and extract text from a URL
+
+## Architecture
 
 ```
-your-project/
-├── .claude/
-│   ├── commands/
-│   │   ├── commit.md
-│   │   ├── publish.md
-│   │   └── push.md
-│   └── skills/
-│       ├── Databases/
-│       ├── Elasticsearch/
-│       └── ...
-├── README.md
-└── spellbook.png
+src/
+├── main.rs           # Application entry point and server setup
+├── config.rs         # Configuration management
+├── error.rs          # Error types
+├── chat/             # Chat handling and streaming
+│   ├── handler.rs    # Request processing
+│   └── stream.rs     # SSE response streaming
+├── ollama/           # Ollama client integration
+│   ├── client.rs     # HTTP client for Ollama API
+│   └── types.rs      # Request/response types
+├── routes/           # HTTP route handlers
+├── session/          # Session management
+│   ├── manager.rs    # Session storage and cleanup
+│   └── types.rs      # Session data structures
+└── tools/            # Tool calling system
+    ├── executor.rs   # Tool execution coordinator
+    ├── parser.rs     # Parse tool calls from LLM output
+    ├── search.rs     # Brave Search integration
+    └── fetch.rs      # Web page fetching
 ```
 
-## How Skills Work
+## How It Works
 
-Skills are markdown files that teach Claude domain-specific patterns. They're loaded automatically when relevant or can be explicitly invoked.
+1. User sends a message via the web interface
+2. Ferret adds the message to the conversation history
+3. The conversation is sent to Ollama with tool definitions
+4. If Ollama requests tool use, Ferret executes the tool and continues
+5. Responses are streamed back to the browser in real-time
+6. Sessions persist conversation history for context
 
-## Source
+## Development
 
-This template is maintained at:
-- https://github.com/lawless-m/claude-skills
+```bash
+# Run in development mode with auto-reload
+cargo watch -x run
+
+# Run tests
+cargo test
+
+# Format code
+cargo fmt
+
+# Lint
+cargo clippy
+```
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions welcome! Please open an issue or PR.
