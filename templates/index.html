@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ferret - Web Search Assistant</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🦡 Ferret</h1>
+            <p class="subtitle">A small but eager web search assistant</p>
+        </header>
+
+        <main>
+            <div id="chat-messages" class="chat-container">
+                <div class="message assistant">
+                    <div class="message-content">
+                        Hello! I'm Ferret, your web search assistant. I can search the web and fetch pages to help answer your questions. What would you like to know?
+                    </div>
+                </div>
+            </div>
+
+            <div id="tool-indicator" class="tool-indicator hidden">
+                <span class="spinner"></span>
+                <span id="tool-text">Searching...</span>
+            </div>
+
+            <form id="chat-form" class="chat-form">
+                <input
+                    type="text"
+                    name="message"
+                    id="message-input"
+                    placeholder="Ask me anything..."
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" id="send-button">Send</button>
+            </form>
+
+            <div class="actions">
+                <button
+                    hx-post="/clear"
+                    hx-swap="none"
+                    class="clear-button"
+                >
+                    Clear Chat
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const toolIndicator = document.getElementById('tool-indicator');
+        const toolText = document.getElementById('tool-text');
+
+        let currentMessageDiv = null;
+        let eventSource = null;
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+
+            // Clear input and disable form
+            messageInput.value = '';
+            sendButton.disabled = true;
+            messageInput.disabled = true;
+
+            // Create assistant message placeholder
+            currentMessageDiv = addMessage('', 'assistant');
+
+            // Start SSE connection
+            const formData = new FormData();
+            formData.append('message', message);
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    body: new URLSearchParams(formData),
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                handleEvent(data);
+                            } catch (e) {
+                                // Ignore parse errors for keep-alive messages
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                if (currentMessageDiv) {
+                    currentMessageDiv.querySelector('.message-content').textContent =
+                        'Sorry, something went wrong. Please try again.';
+                }
+            } finally {
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                messageInput.focus();
+                hideToolIndicator();
+            }
+        });
+
+        function handleEvent(data) {
+            switch (data.type) {
+                case 'chunk':
+                    if (currentMessageDiv) {
+                        const content = currentMessageDiv.querySelector('.message-content');
+                        content.textContent += data.content;
+                        scrollToBottom();
+                    }
+                    break;
+
+                case 'tool_start':
+                    showToolIndicator(data.tool, data.query);
+                    break;
+
+                case 'tool_end':
+                    hideToolIndicator();
+                    break;
+
+                case 'error':
+                    if (currentMessageDiv) {
+                        const content = currentMessageDiv.querySelector('.message-content');
+                        content.textContent = 'Error: ' + data.message;
+                    }
+                    break;
+
+                case 'done':
+                    hideToolIndicator();
+                    break;
+            }
+        }
+
+        function addMessage(text, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = text;
+
+            messageDiv.appendChild(contentDiv);
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+
+            return messageDiv;
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showToolIndicator(tool, query) {
+            toolIndicator.classList.remove('hidden');
+            if (tool === 'search') {
+                toolText.textContent = `Searching: "${query}"`;
+            } else if (tool === 'fetch') {
+                toolText.textContent = `Fetching: ${query}`;
+            } else {
+                toolText.textContent = `Running ${tool}...`;
+            }
+        }
+
+        function hideToolIndicator() {
+            toolIndicator.classList.add('hidden');
+        }
+
+        // Handle chat clear
+        document.body.addEventListener('chat-cleared', () => {
+            chatContainer.innerHTML = `
+                <div class="message assistant">
+                    <div class="message-content">
+                        Chat cleared. What would you like to know?
+                    </div>
+                </div>
+            `;
+        });
+
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>
