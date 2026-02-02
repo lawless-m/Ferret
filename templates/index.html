@@ -6,7 +6,7 @@
     <title>Ferret - Web Search Assistant</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
     <div class="container">
@@ -43,7 +43,7 @@
 
             <div class="actions">
                 <button
-                    hx-post="/clear"
+                    hx-post="clear"
                     hx-swap="none"
                     class="clear-button"
                 >
@@ -62,7 +62,17 @@
         const toolText = document.getElementById('tool-text');
 
         let currentMessageDiv = null;
+        let currentMessageText = '';
         let eventSource = null;
+
+        // Convert markdown links to HTML
+        function markdownToHtml(text) {
+            // Convert [text](url) to <a href="url" target="_blank">text</a>
+            text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            // Convert line breaks to <br>
+            text = text.replace(/\n/g, '<br>');
+            return text;
+        }
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -79,6 +89,7 @@
             messageInput.disabled = true;
 
             // Create assistant message placeholder
+            currentMessageText = '';
             currentMessageDiv = addMessage('', 'assistant');
 
             // Start SSE connection
@@ -86,7 +97,7 @@
             formData.append('message', message);
 
             try {
-                const response = await fetch('/chat', {
+                const response = await fetch('chat', {
                     method: 'POST',
                     body: new URLSearchParams(formData),
                     headers: {
@@ -137,8 +148,9 @@
             switch (data.type) {
                 case 'chunk':
                     if (currentMessageDiv) {
+                        currentMessageText += data.content;
                         const content = currentMessageDiv.querySelector('.message-content');
-                        content.textContent += data.content;
+                        content.innerHTML = markdownToHtml(currentMessageText);
                         scrollToBottom();
                     }
                     break;
@@ -200,6 +212,7 @@
 
         // Handle chat clear
         document.body.addEventListener('chat-cleared', () => {
+            currentMessageText = '';
             chatContainer.innerHTML = `
                 <div class="message assistant">
                     <div class="message-content">

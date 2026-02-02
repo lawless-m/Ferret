@@ -90,6 +90,20 @@ main {
     border-bottom-left-radius: 4px;
 }
 
+.message-content a {
+    color: #7dd3fc;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+
+.message-content a:hover {
+    color: #e94560;
+}
+
+.message-content a:visited {
+    color: #a78bfa;
+}
+
 .tool-indicator {
     display: flex;
     align-items: center;
